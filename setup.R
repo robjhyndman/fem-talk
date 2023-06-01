@@ -1,6 +1,9 @@
 
 library(fpp3)
 library(patchwork)
+library(knitr)
+library(kableExtra)
+library(scales)
 
 # Set some defaults
 options(digits = 3, width = 88)

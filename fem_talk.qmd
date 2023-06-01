@@ -19,11 +19,17 @@ execute:
   echo: false
   message: false
   warning: false
-  cache: false
+  cache: true
 ---
 
 ```{r}
-source("setup.R")
+#| cache: false
+source(here::here("setup.R"))
+```
+
+```{r}
+#| label: data
+incident_gthf <- readr::read_rds(here::here("data/incidents_gt.rds"))
 ```
 
 ## Outline
@@ -31,16 +37,16 @@ source("setup.R")
 \vspace*{0.4cm}\tableofcontents
 
 
+## Data
 
+* Daily number of attended incidents:\newline 1 October 2015 -- 31 July 2019
+* Disaggregated by nature of incidents, priority, the health board managing the service and the control area (or region).
+* `r label_comma()(NROW(incident_gthf))` rows observations from `r label_comma()(NROW(attributes(incident_gthf)$key))` time series.
 
-## Data {#sec-data}
-
-Daily number of attended incidents: 1 October 2015 -- 31 July 2019
-
-* disaggregated by nature of incidents, priority, the health board managing the service and the control area (or region).
-
+## Data structure
 
 ```{r}
+#| include: false
 data <- data.frame(
   level1 = "Total",
   level2 = c(
@@ -50,18 +56,18 @@ data <- data.frame(
   level3 = c("HD", "SB", "PO", "BC", "CV", "CT", "AB")
 )
 # transform it to a edge list!
-edges_level1_2 <- data %>%
-  select(level1, level2) %>%
-  unique() %>%
+edges_level1_2 <- data |>
+  select(level1, level2) |>
+  unique() |>
   rename(from = level1, to = level2)
-edges_level2_3 <- data %>%
-  select(level2, level3) %>%
-  unique() %>%
+edges_level2_3 <- data |>
+  select(level2, level3) |>
+  unique() |>
   rename(from = level2, to = level3)
-edge_list <- rbind(edges_level1_2, edges_level2_3)
-
-mygraph <- igraph::graph_from_data_frame(edge_list)
-ggraph::ggraph(mygraph, layout = "dendrogram", circular = FALSE) +
+Cairo::CairoPDF(here::here("figs/group.pdf"), width = 6, height = 6)
+rbind(edges_level1_2, edges_level2_3) |>
+  igraph::graph_from_data_frame() |>
+  ggraph::ggraph(layout = "dendrogram", circular = FALSE) +
   ggraph::geom_edge_diagonal() +
   ggraph::geom_node_point(color = "#dddddd", size = 10) +
   ggraph::geom_node_text(
@@ -71,15 +77,22 @@ ggraph::ggraph(mygraph, layout = "dendrogram", circular = FALSE) +
       "HD", "SB", "PO", "BC", "CV", "CT", "AB"
     ))
   ) +
-  theme_void()
-
-knitr::include_graphics(here::here("figs/group.png"))
+  theme_void() +
+  theme(
+    panel.background = element_rect(fill = "transparent"), # transparent panel bg
+    plot.background = element_rect(fill = "transparent"), # transparent plot bg
+  )
+crop::dev.off.crop()
 ```
+
+\placefig{0.3}{1.5}{width=7cm}{group.pdf}
+\placefig{7.5}{1.5}{width=7.7cm}{group.png}
+
+## Data structure
+\fontsize{10}{11}\sf
 
 ```{r}
 #| label: tbl-hierarchy
-#| cache: true
-#| tbl-cap: "Number of time series in each level for the hierarchical & grouped structure of attended incidents"
 agg_level <- tibble::tribble(
   ~Level, ~`Number of series`,
   "All country", 1,
@@ -96,106 +109,98 @@ agg_level <- tibble::tribble(
   "Control * Health board * Priority * Nature of incident (Bottom level)", 691,
   "Total", 1530
 )
-knitr::kable(agg_level, booktabs = TRUE, position = "left") %>%
+knitr::kable(agg_level, booktabs = TRUE, position = "left", linesep = "") |>
   kable_classic(full_width = FALSE)
 ```
 
-Given the total number of time series, direct visual analysis is infeasible. Therefore, we first compute features of all 1530 time series [@m3pca] and display the strength of trend and weekly seasonality strength in @fig-feature. Each point represents one time series with the strength of trend in x-axis and the strength of seasonality in y-axis. Both measures are on a scale of [0,1]. It is clear that there are some series showing strong trends and/or seasonality, corresponding to series at the higher levels of the hierarchy. The majority of series show low trend and seasonality. These are time series belonging to the bottom series, series related to the nature of incidents for a given control, health board and priority level. Bottom series are dominated by noise with little or no systematic patterns.
+## Aggregated daily incidents
 
 ```{r}
-#| label: fig-feature
-#| cache: true
-#| out.width: "70%"
-#| fig.align: center
-#| fig-cap: "Time series features of attended incidents across all levels (1530 series)"
-incident_gthf <- readr::read_rds(here::here("data/incidents_gt.rds"))
-incident_gthf %>%
-  features(incident, feat_stl) %>%
-  ggplot(aes(x = trend_strength, y = seasonal_strength_week)) +
-  geom_point(alpha = 0.25) +
-  labs(x = "Strength of trend", y = "Strength of weekly seasonality")
+incident_gthf |>
+  filter(is_aggregated(region) & is_aggregated(lhb) & is_aggregated(category) & is_aggregated(nature)) |>
+  autoplot(incident) +
+  labs(x = "Date", y = "Incidents")
 ```
 
-In addition to displaying the trend and seasonality features, we also visualize few time series at various levels of the aggregation. @fig-dataviz2 reveals different information such as trend, seasonality, and noise. For example, some series depict seasonality and trend, whereas some other series report low volume of attended incidents and entropy, making them more volatile and difficult to forecast. At the level on nature of incidents combined with categories of other levels, there are many series that contain zeros with low counts. As such, the data set represents a diverse set of daily time series patterns.
+## Daily incidents by control area
 
 ```{r}
-#| label: fig-dataviz2
-#| cache: true
-#| dependson: "fig-feature"
-#| out.width: "100%"
-#| fig-width: 8
-#| fig-height: 10
-#| fig-cap: "Time series of attended incidents at various levels. The panels show data from the whole country (top panel), by control area, by health board, by priority level, and by nature of incident. Only four of the 35 nature of incident categories are shown to avoid too much overplotting."
-no_x_axis <- theme(
-  axis.title.x = element_blank(),
-  axis.text.x = element_blank(),
-  axis.ticks.x = element_blank()
-)
-p_total <- incident_gthf %>%
-  filter(is_aggregated(region) & is_aggregated(lhb) & is_aggregated(category) & is_aggregated(nature)) %>%
-  autoplot(incident) +
-  labs(x = "", y = "Incidents") +
-  ggthemes::scale_color_colorblind() +
-  ggthemes::theme_few() +
-  no_x_axis
-
-p_control <- incident_gthf %>%
-  filter(!is_aggregated(region) & !is_aggregated(lhb) & is_aggregated(category) & is_aggregated(nature)) %>%
-  as_tibble() %>%
-  select(-nature, -category) %>%
-  group_by(date, region) %>%
-  summarise(incident = sum(incident), .groups = "drop") %>%
+incident_gthf |>
+  filter(!is_aggregated(region) & !is_aggregated(lhb) & is_aggregated(category) & is_aggregated(nature)) |>
+  as_tibble() |>
+  select(-nature, -category) |>
+  group_by(date, region) |>
+  summarise(incident = sum(incident), .groups = "drop") |>
   ggplot(aes(x = date, y = incident, color = factor(region))) +
   geom_line() +
-  labs(y = "Incidents", color = "Control")  +
-  ggthemes::scale_color_colorblind() +
-  ggthemes::theme_few() +
-  no_x_axis
+  labs(x="Date", y = "Incidents", color = "Control")
+```
 
-p_board <- incident_gthf %>%
-  filter(!is_aggregated(region) & !is_aggregated(lhb) & is_aggregated(category) & is_aggregated(nature)) %>%
-  as_tibble() %>%
-  select(-nature, -category) %>%
+## Data incidents by health board
+
+```{r}
+incident_gthf |>
+  filter(!is_aggregated(region) & !is_aggregated(lhb) & is_aggregated(category) & is_aggregated(nature)) |>
+  as_tibble() |>
+  select(-nature, -category) |>
   ggplot(aes(x = date, y = incident, color = factor(lhb))) +
   geom_line() +
-  # facet_wrap(vars(factor(region)), scales = "free_y") +
-  labs(y = "Incidents", color = "Health board") +
-  ggthemes::scale_color_colorblind() +
-  ggthemes::theme_few() +
-  no_x_axis
+  labs(y = "Incidents", color = "Health board")
+```
 
-p_priority <- incident_gthf %>%
-  filter(is_aggregated(region) & is_aggregated(lhb) & !is_aggregated(category) & is_aggregated(nature)) %>%
+## Data incidents by priority
+
+```{r}
+incident_gthf |>
+  filter(is_aggregated(region) & is_aggregated(lhb) & !is_aggregated(category) & is_aggregated(nature)) |>
   mutate(
     category = recode(category, RED = "Red", AMB = "Amber", GRE = "Green"),
     category = factor(category, levels = c("Red", "Amber", "Green"))
   ) |>
-  as_tibble() %>%
-  select(-nature, -region) %>%
+  as_tibble() |>
+  select(-nature, -region) |>
   ggplot(aes(x = date, y = incident, color = factor(category))) +
   geom_line() +
   scale_color_manual(values = c(Red = "#ff3300", Amber = "#E69f00", Green = "#009e73")) +
-  labs(y = "Incidents", color = "Priority") +
-  ggthemes::theme_few() +
-  no_x_axis
+  labs(y = "Incidents", color = "Priority")
+```
 
-selected_nature <- c("CHESTPAIN", "STROKECVA", "BREATHING", "ABDOMINAL")
-p_nature <- incident_gthf %>%
-  filter(is_aggregated(region) & is_aggregated(lhb) & is_aggregated(category) & !is_aggregated(nature)) %>%
-  as_tibble() %>%
-  mutate(nature = as.character(nature)) %>%
-  filter(nature %in% selected_nature) %>%
-  group_by(date, nature, lhb) %>%
-  summarise(incident = sum(incident), .groups = "drop") %>%
+## Data incidents by nature of incident
+
+```{r}
+incident_gthf |>
+  filter(is_aggregated(region) & is_aggregated(lhb) & is_aggregated(category) & !is_aggregated(nature)) |>
+  as_tibble() |>
+  mutate(nature = as.character(nature)) |>
+  group_by(date, nature, lhb) |>
+  summarise(incident = sum(incident), .groups = "drop") |>
   ggplot(aes(x = date, y = incident, color = nature)) +
   geom_line() +
-  labs(x = "Date", y = "Incidents", color = "Nature of incident")+
-  ggthemes::scale_color_colorblind() +
-  ggthemes::theme_few()
+  labs(x = "Date", y = "Incidents", color = "Nature of incident")
+```
 
-p_total /
-  p_control /
-  p_board /
-  p_priority /
-  p_nature
+## Data incidents by nature of incident
+
+```{r}
+selected_nature <- c("CHESTPAIN", "STROKECVA", "BREATHING", "ABDOMINAL")
+incident_gthf |>
+  filter(is_aggregated(region) & is_aggregated(lhb) & is_aggregated(category) & !is_aggregated(nature)) |>
+  as_tibble() |>
+  mutate(nature = as.character(nature)) |>
+  filter(nature %in% selected_nature) |>
+  group_by(date, nature, lhb) |>
+  summarise(incident = sum(incident), .groups = "drop") |>
+  ggplot(aes(x = date, y = incident, color = nature)) +
+  geom_line() +
+  labs(x = "Date", y = "Incidents", color = "Nature of incident")
+```
+
+## Data features
+
+```{r}
+incident_gthf |>
+  features(incident, feat_stl) |>
+  ggplot(aes(x = trend_strength, y = seasonal_strength_week)) +
+  geom_point(alpha = 0.25) +
+  labs(x = "Strength of trend", y = "Strength of weekly seasonality")
 ```
