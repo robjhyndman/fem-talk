@@ -19,10 +19,11 @@ execute:
   echo: false
   message: false
   warning: false
-  cache: true
+  cache: false
 ---
 
 ```{r}
+#| label: setup
 #| cache: false
 source(here::here("setup.R"))
 ```
@@ -49,6 +50,7 @@ incident_gthf <- readr::read_rds(here::here("data/incidents_gt.rds"))
 ## Data structure
 
 ```{r}
+#| label: data_structure
 #| include: false
 data <- data.frame(
   level1 = "Total",
@@ -82,7 +84,7 @@ rbind(edges_level1_2, edges_level2_3) |>
   ) +
   theme_void() +
   theme(
-    panel.background = element_rect(fill = "transparent"), # transparent panel bg
+    # panel.background = element_rect(fill = "transparent"), # transparent panel bg
     plot.background = element_rect(fill = "transparent"), # transparent plot bg
   )
 crop::dev.off.crop()
@@ -95,6 +97,7 @@ crop::dev.off.crop()
 \fontsize{10}{11}\sf
 
 ```{r}
+#| label: data_structure_table
 agg_level <- tibble::tribble(
   ~Level, ~`Number of series`,
   "All country", 1,
@@ -115,19 +118,15 @@ knitr::kable(agg_level, booktabs = TRUE, position = "left", linesep = "") |>
   kable_classic(full_width = FALSE)
 ```
 
-## Aggregated daily incidents
-
 ```{r}
-incident_gthf |>
+#| label: time_plots
+gglabs <- ggplot2::labs(x = "Date", y = "Incidents")
+p_total <- incident_gthf |>
   filter(is_aggregated(region) & is_aggregated(lhb) & is_aggregated(category) & is_aggregated(nature)) |>
   autoplot(incident) +
-  labs(x = "Date", y = "Incidents")
-```
+  gglabs
 
-## Daily incidents by control area
-
-```{r}
-incident_gthf |>
+p_control <- incident_gthf |>
   filter(!is_aggregated(region) & !is_aggregated(lhb) & is_aggregated(category) & is_aggregated(nature)) |>
   as_tibble() |>
   select(-nature, -category) |>
@@ -135,25 +134,19 @@ incident_gthf |>
   summarise(incident = sum(incident), .groups = "drop") |>
   ggplot(aes(x = date, y = incident, color = factor(region))) +
   geom_line() +
-  labs(x="Date", y = "Incidents", color = "Control")
-```
+  gglabs +
+  labs(color = "Control")
 
-## Data incidents by health board
-
-```{r}
-incident_gthf |>
+p_board <- incident_gthf |>
   filter(!is_aggregated(region) & !is_aggregated(lhb) & is_aggregated(category) & is_aggregated(nature)) |>
   as_tibble() |>
   select(-nature, -category) |>
   ggplot(aes(x = date, y = incident, color = factor(lhb))) +
   geom_line() +
-  labs(y = "Incidents", color = "Health board")
-```
+  gglabs +
+  labs(color = "Health board")
 
-## Data incidents by priority
-
-```{r}
-incident_gthf |>
+p_priority <- incident_gthf |>
   filter(is_aggregated(region) & is_aggregated(lhb) & !is_aggregated(category) & is_aggregated(nature)) |>
   mutate(
     category = recode(category, RED = "Red", AMB = "Amber", GRE = "Green"),
@@ -164,28 +157,31 @@ incident_gthf |>
   ggplot(aes(x = date, y = incident, color = factor(category))) +
   geom_line() +
   scale_color_manual(values = c(Red = "#ff3300", Amber = "#E69f00", Green = "#009e73")) +
-  labs(y = "Incidents", color = "Priority")
-```
+  gglabs +
+  labs(color = "Priority")
 
-## Data incidents by nature of incident
-
-```{r}
-incident_gthf |>
+p_nature1 <- incident_gthf |>
   filter(is_aggregated(region) & is_aggregated(lhb) & is_aggregated(category) & !is_aggregated(nature)) |>
   as_tibble() |>
-  mutate(nature = as.character(nature)) |>
+  mutate(nature = stringr::str_pad(as.character(nature), width = 12, side = "right")) |>
   group_by(date, nature, lhb) |>
   summarise(incident = sum(incident), .groups = "drop") |>
   ggplot(aes(x = date, y = incident, color = nature)) +
   geom_line() +
-  labs(x = "Date", y = "Incidents", color = "Nature of incident")
-```
+  gglabs +
+  labs(color = "Nature of incident")
 
-## Data incidents by nature of incident
-
-```{r}
+top_cat <- incident_gthf |>
+  as_tibble() |>
+  filter(!is_aggregated(nature)) |>
+  group_by(nature) |>
+  summarise(incident = sum(incident), .groups = "drop") |>
+  arrange(desc(incident)) |>
+  head(3) |>
+  pull(nature) |>
+  as.character()
 selected_nature <- c("CHESTPAIN", "STROKECVA", "BREATHING", "ABDOMINAL")
-incident_gthf |>
+p_nature2 <- incident_gthf |>
   filter(is_aggregated(region) & is_aggregated(lhb) & is_aggregated(category) & !is_aggregated(nature)) |>
   as_tibble() |>
   mutate(nature = as.character(nature)) |>
@@ -194,12 +190,58 @@ incident_gthf |>
   summarise(incident = sum(incident), .groups = "drop") |>
   ggplot(aes(x = date, y = incident, color = nature)) +
   geom_line() +
-  labs(x = "Date", y = "Incidents", color = "Nature of incident")
+  gglabs +
+  labs(color = "Nature of incident")
+
+p <- patchwork::align_patches(p_total, p_control, p_board, p_priority, p_nature1, p_nature2)
+```
+
+## Aggregated daily incidents
+
+```{r}
+#| label: time_plots1
+p[[1]]
+```
+
+## Daily incidents by control area
+
+```{r}
+#| label: time_plots2
+p[[2]]
+```
+
+## Data incidents by health board
+
+```{r}
+#| label: time_plots3
+p[[3]]
+```
+
+## Data incidents by priority
+
+```{r}
+#| label: time_plots4
+p[[4]]
+```
+
+## Data incidents by nature of incident
+
+```{r}
+#| label: time_plots5
+p[[5]]
+```
+
+## Data incidents by nature of incident
+
+```{r}
+#| label: time_plots6
+p[[6]]
 ```
 
 ## Data features
 
 ```{r}
+#| label: data_features
 incident_gthf |>
   features(incident, feat_stl) |>
   ggplot(aes(x = trend_strength, y = seasonal_strength_week)) +
@@ -300,52 +342,54 @@ $\hspace*{2cm}\vdots$
 
 \vspace*{0.2cm}\begin{block}{}
 \centerline{$\text{MASE} = \text{mean}(|q_{j}|)$}
-where
 $$
-  q_{j} = \frac{e_{j}}
- {\displaystyle\frac{1}{T-m}\sum_{t=m+1}^T |y_{t}-y_{t-m}|},
+  q_{j} = \frac{e_{j}\phantom{^2}}
+ {\displaystyle\frac{1}{T-m}\sum_{t=m+1}^T |y_{t}-y_{t-m}|}
 $$
 \end{block}
 
-* $e_{j}=$ forecast error for forecast horizon $j$,
-* $m = 7$
 * $y_t=$ observation for period $t$
+* $e_{j}=$ forecast error for forecast horizon $j$
 * $T=$ size of training set
+* $m = 7$
+
+\vspace*{10cm}
 
 ## Performance evaluation
 
 \vspace*{0.2cm}\begin{block}{}
 \centerline{$\text{MSSE} = \text{mean}(q_{j}^2)$}
-where
 $$
   q^2_{j} = \frac{ e^2_{j}}
- {\displaystyle\frac{1}{T-m}\sum_{t=m+1}^T (y_{t}-y_{t-m})^2},
+ {\displaystyle\frac{1}{T-m}\sum_{t=m+1}^T (y_{t}-y_{t-m})^2}
 $$
 \end{block}
 
-* $e_{j}=$ forecast error for forecast horizon $j$,
-* $m = 7$
 * $y_t=$ observation for period $t$
+* $e_{j}=$ forecast error for forecast horizon $j$
 * $T=$ size of training set
+* $m = 7$
+
+\vspace*{10cm}
 
 ## Performance evaluation
 
 \vspace*{0.2cm}\begin{block}{}
 \centerline{$\text{CRPS} = \text{mean}(p_j)$}
-where
 $$
   p_j = \int_{-\infty}^{\infty} \left(G_j(x) - F_j(x)\right)^2dx,
 $$
 \end{block}
 
-* $G_j(x)=$ forecasted probability distribution function for forecast horizon $j$
-* $F_j(x)=$ true probability distribution function for the same period.
+* $G_j(x)=$ forecast distribution for forecast horizon $j$
+* $F_j(x)=$ true distribution for same period
 
-
+\vspace*{10cm}
 
 # Results
 
 ```{r}
+#| label: results
 #| include: false
 rmsse <- readr::read_rds(here::here("results/rmsse.rds")) |>
   mutate(msse = rmsse^2)
@@ -361,6 +405,7 @@ crps <- readr::read_rds(here::here("results/crps.rds")) |>
 ## Results
 
 ```{r}
+#| label: results_graph
 crps <- crps |>
   pivot_longer(ensemble:tscount, names_to = "model", values_to = "crps")
 
@@ -379,13 +424,13 @@ acc_summary <- accuracy |>
   ) |>
   mutate(model = case_when(
     model == "naiveecdf" ~ "Naïve",
-    model == "ets" ~  "ETS",
+    model == "ets" ~ "ETS",
     model == "tscount" ~ "TSGLM",
     model == "iglm" ~ "GLM",
     model == "ensemble" ~ "Ensemble"
   )) |>
   mutate(
-    measure = factor(measure, levels = c("mase","msse","crps"), labels = c("MASE","MSSE","CRPS")),
+    measure = factor(measure, levels = c("mase", "msse", "crps"), labels = c("MASE", "MSSE", "CRPS")),
     series = factor(series, levels = c("Total", "Control areas", "Health boards")),
     model = factor(model, levels = c("Naïve", "ETS", "TSGLM", "GLM", "Ensemble")),
     week = factor(trunc((h - 1) / 7) + 1)
@@ -406,12 +451,13 @@ acc_summary |>
 \fontsize{10}{10}\sf
 
 ```{r}
+#| label: results_table_msse
 # Set minimum in column to bold
 set_to_bold <- function(table) {
-  for(i in 3:6) {
+  for (i in 3:6) {
     best <- which.min(table[[i]])
-    table[[i]] <- sprintf(table[[i]], fmt="%1.3f")
-    table[[i]][best] <- cell_spec(table[[i]][best], bold=TRUE)
+    table[[i]] <- sprintf(table[[i]], fmt = "%1.3f")
+    table[[i]][best] <- cell_spec(table[[i]][best], bold = TRUE)
   }
   return(table)
 }
@@ -422,9 +468,11 @@ msse1 <- rmsse |>
     model != "qcomb",
     h > 42
   ) |>
-  mutate(model = factor(model,
-    levels = c("naiveecdf","ets","iglm","tscount","ensemble"),
-    labels = c("Naïve", "ETS", "GLM", "TSGLM","Ensemble")),
+  mutate(
+    model = factor(model,
+      levels = c("naiveecdf", "ets", "iglm", "tscount", "ensemble"),
+      labels = c("Naïve", "ETS", "GLM", "TSGLM", "Ensemble")
+    ),
     method = factor(method, levels = c("base", "mint"), labels = c("Base", "MinT")),
   ) |>
   group_by(method, model, series) |>
@@ -432,7 +480,7 @@ msse1 <- rmsse |>
   pivot_wider(names_from = series, values_from = msse) |>
   select(Method = method, Model = model, Total, `Control areas`, `Health boards`, Bottom) |>
   set_to_bold()
-kbl(msse1, booktabs = TRUE, escape = FALSE, align="llrrrr") |>
+kbl(msse1, booktabs = TRUE, escape = FALSE, align = "llrrrr") |>
   add_header_above(c(" " = 2, "MSSE" = 4)) |>
   kable_styling(latex_options = c("hold_position"))
 ```
@@ -441,6 +489,7 @@ kbl(msse1, booktabs = TRUE, escape = FALSE, align="llrrrr") |>
 \fontsize{10}{10}\sf
 
 ```{r}
+#| label: results_table_mase
 mase1 <- mase |>
   filter(
     method %in% c("mint", "base"),
@@ -449,8 +498,9 @@ mase1 <- mase |>
   ) |>
   mutate(
     model = factor(model,
-      levels = c("naiveecdf","ets","iglm","tscount","ensemble"),
-      labels = c("Naïve", "ETS", "GLM", "TSGLM","Ensemble")),
+      levels = c("naiveecdf", "ets", "iglm", "tscount", "ensemble"),
+      labels = c("Naïve", "ETS", "GLM", "TSGLM", "Ensemble")
+    ),
     method = factor(method, levels = c("base", "mint"), labels = c("Base", "MinT"))
   ) |>
   group_by(method, model, series) |>
@@ -458,7 +508,7 @@ mase1 <- mase |>
   pivot_wider(names_from = series, values_from = mase) |>
   select(Method = method, Model = model, Total, `Control areas`, `Health boards`, Bottom) |>
   set_to_bold()
-kbl(mase1, booktabs = TRUE, escape = FALSE, align="llrrrr") |>
+kbl(mase1, booktabs = TRUE, escape = FALSE, align = "llrrrr") |>
   add_header_above(c(" " = 2, "MASE" = 4)) |>
   kable_styling(latex_options = c("hold_position"))
 ```
@@ -467,14 +517,18 @@ kbl(mase1, booktabs = TRUE, escape = FALSE, align="llrrrr") |>
 \fontsize{10}{10}\sf
 
 ```{r}
+
 crps1 <- readr::read_rds(here::here("results/crps.rds")) |>
-  filter(method %in% c("mint", "base"),
-         model != "qcomb",
-         h > 42
+  filter(
+    method %in% c("mint", "base"),
+    model != "qcomb",
+    h > 42
   ) |>
-  mutate(model = factor(model,
-    levels = c("naiveecdf","ets","iglm","tscount","ensemble"),
-    labels = c("Naïve", "ETS", "GLM", "TSGLM","Ensemble")),
+  mutate(
+    model = factor(model,
+      levels = c("naiveecdf", "ets", "iglm", "tscount", "ensemble"),
+      labels = c("Naïve", "ETS", "GLM", "TSGLM", "Ensemble")
+    ),
     method = factor(method, levels = c("base", "mint"), labels = c("Base", "MinT"))
   ) |>
   group_by(method, model, series) |>
@@ -482,7 +536,7 @@ crps1 <- readr::read_rds(here::here("results/crps.rds")) |>
   pivot_wider(names_from = series, values_from = crps) |>
   select(Method = method, Model = model, Total, `Control areas`, `Health boards`, Bottom) |>
   set_to_bold()
-kbl(crps1, booktabs = TRUE, escape = FALSE, align="llrrrr") |>
+kbl(crps1, booktabs = TRUE, escape = FALSE, align = "llrrrr") |>
   add_header_above(c(" " = 2, "CRPS" = 4)) |>
   kable_styling(latex_options = c("hold_position"))
 ```
