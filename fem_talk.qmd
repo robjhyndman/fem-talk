@@ -27,17 +27,20 @@ execute:
 source(here::here("setup.R"))
 ```
 
+## Outline
+
+\vspace*{0.4cm}\tableofcontents
+
+# Data
+
+## Data
+
 ```{r}
 #| label: data
 incident_gthf <- readr::read_rds(here::here("data/incidents_gt.rds"))
 ```
 
-## Outline
 
-\vspace*{0.4cm}\tableofcontents
-
-
-## Data
 
 * Daily number of attended incidents:\newline 1 October 2015 -- 31 July 2019
 * Disaggregated by nature of incidents, priority, the health board managing the service and the control area (or region).
@@ -92,7 +95,6 @@ crop::dev.off.crop()
 \fontsize{10}{11}\sf
 
 ```{r}
-#| label: tbl-hierarchy
 agg_level <- tibble::tribble(
   ~Level, ~`Number of series`,
   "All country", 1,
@@ -204,3 +206,285 @@ incident_gthf |>
   geom_point(alpha = 0.25) +
   labs(x = "Strength of trend", y = "Strength of weekly seasonality")
 ```
+
+# Forecast methods and evaluation
+
+## Forecasting methods
+
+1. **Naïve**: Empirical distribution of past daily attended incidents.
+2. **ETS**: Exponential Smoothing State Space models.
+3. **GLM**: Poission Regression with spline trend, day of the week, annual Fourier seasonality, public holidays, school holidays, Christmas Day, New Year's Day.
+4. **TSGLM**: Poisson Regression with same covariates plus three autoregressive terms.
+5. **Ensemble**: Mixture distribution of 1--4.
+
+## Notation reminder
+
+\begin{textblock}{8.5}(0.2,1.5)
+Every collection of time series with linear constraints can be written as
+\centerline{\colorbox[RGB]{210,210,210}{$\bY_{t}=\color{blue}\bS\color{red}\bm{b}_{t}$}}
+\vspace*{-0.9cm}\begin{itemize}\parskip=0cm\itemsep=0cm
+\item $\by_t=$ vector of all series at time $t$
+\item $ y_{\text{Total},t}= $ aggregate of all series at time
+$t$.
+\item $ y_{X,t}= $ value of series $X$ at time $t$.
+\item $\color{red}{\bm{b}_t}=$ vector of most disaggregated series at time $t$
+\item $\color{blue}{\bS}=$ ``summing matrix'' containing the linear constraints.
+\end{itemize}
+\end{textblock}
+
+\begin{textblock}{5.7}(11.4,0.1)
+\begin{minipage}{4cm}
+\begin{block}{}\centering
+\begin{tikzpicture}
+\tikzstyle{every node}=[ellipse,draw,fill=red!15,inner sep=2pt]
+\tikzstyle[level distance=.3cm]
+\tikzstyle[sibling distance=12cm]
+\tikzstyle{level 1}=[sibling distance=10mm,font=\small,set style={{every node}+=[fill=blue!15]}]
+\node{Total}[edge from parent fork down]
+ child {node {A}
+ }
+ child {node {B}
+ }
+ child {node {C}
+ };
+\end{tikzpicture}
+\end{block}
+\end{minipage}
+\end{textblock}
+
+\only<1>{\begin{textblock}{5.7}(9.4,2.8)\fontsize{14}{15}\sf
+\begin{align*}
+\bY_{t}&= \begin{pmatrix}
+  y_{\text{Total},t}\\
+  y_{A,t}\\
+  y_{B,t}\\
+  y_{C,t}
+  \end{pmatrix}  \\
+  &= {\color{blue}\underbrace{\begin{pmatrix}
+                1 & 1 & 1 \\
+                1 & 0 & 0 \\
+                0 & 1 & 0\\
+                0 & 0 & 1
+                \end{pmatrix}}_{\bS}}
+     {\color{red}\underbrace{\begin{pmatrix}
+       y_{A,t}\\y_{B,t}\\y_{C,t}
+       \end{pmatrix}}_{\bm{b}_{t}}}
+\end{align*}
+\end{textblock}}
+\only<2>{\begin{textblock}{5.7}(9.4,3.2)\fontsize{14}{15}\sf
+\begin{alertblock}{}
+\begin{itemize}\itemsep=0.1cm
+\item Base forecasts: $\hat{\bm{y}}_{T+h|T}$
+\item Reconciled forecasts: $\tilde{\bm{y}}_{T+h|T}=\bS\bm{G}\hat{\bm{y}}_{T+h|T}$
+\item MinT: $\bG = (\bS'\bm{W}_h^{-1}\bS)^{-1}\bS'\bm{W}_h^{-1}$ where $\bm{W}_h$ is covariance matrix of base forecast errors.
+\end{itemize}
+\end{alertblock}
+\end{textblock}}
+
+## Nonparametric bootstrap reconciliation
+
+
+## Performance evaluation
+
+* Time series cross-validation: forecast horizon of 1--84 \rlap{days.}
+* Forecasts at 43--84 days correspond to planning horizon.
+
+1. Training set: all data to 2018-04-25.
+2. Training set: all data to 2018-06-06.
+
+$\hspace*{2cm}\vdots$
+
+10. Training set: all data to 2019-05-09.
+
+## Performance evaluation
+
+\vspace*{0.2cm}\begin{block}{}
+\centerline{$\text{MASE} = \text{mean}(|q_{j}|)$}
+where
+$$
+  q_{j} = \frac{e_{j}}
+ {\displaystyle\frac{1}{T-m}\sum_{t=m+1}^T |y_{t}-y_{t-m}|},
+$$
+\end{block}
+
+* $e_{j}=$ forecast error for forecast horizon $j$,
+* $m = 7$
+* $y_t=$ observation for period $t$
+* $T=$ size of training set
+
+## Performance evaluation
+
+\vspace*{0.2cm}\begin{block}{}
+\centerline{$\text{MSSE} = \text{mean}(q_{j}^2)$}
+where
+$$
+  q^2_{j} = \frac{ e^2_{j}}
+ {\displaystyle\frac{1}{T-m}\sum_{t=m+1}^T (y_{t}-y_{t-m})^2},
+$$
+\end{block}
+
+* $e_{j}=$ forecast error for forecast horizon $j$,
+* $m = 7$
+* $y_t=$ observation for period $t$
+* $T=$ size of training set
+
+## Performance evaluation
+
+\vspace*{0.2cm}\begin{block}{}
+\centerline{$\text{CRPS} = \text{mean}(p_j)$}
+where
+$$
+  p_j = \int_{-\infty}^{\infty} \left(G_j(x) - F_j(x)\right)^2dx,
+$$
+\end{block}
+
+* $G_j(x)=$ forecasted probability distribution function for forecast horizon $j$
+* $F_j(x)=$ true probability distribution function for the same period.
+
+
+
+# Results
+
+```{r}
+#| include: false
+rmsse <- readr::read_rds(here::here("results/rmsse.rds")) |>
+  mutate(msse = rmsse^2)
+mase <- readr::read_rds(here::here("results/mase.rds"))
+crps <- readr::read_rds(here::here("results/crps.rds")) |>
+  pivot_wider(names_from = model, values_from = crps) |>
+  group_by(method, h, series) |>
+  mutate(across(where(is.numeric), ~ .x / naiveecdf)) |>
+  ungroup()
+```
+
+
+## Results
+
+```{r}
+crps <- crps |>
+  pivot_longer(ensemble:tscount, names_to = "model", values_to = "crps")
+
+accuracy <- bind_rows(
+  rmsse |> mutate(measure = "msse", accuracy = rmsse^2),
+  mase |> mutate(measure = "mase", accuracy = mase),
+  crps |> mutate(measure = "crps", accuracy = crps),
+) |>
+  select(-rmsse, -mase, -crps)
+
+# Plot of average accuracy vs week for each method for Total
+acc_summary <- accuracy |>
+  filter(
+    series %in% c("Total", "Control areas", "Health boards"),
+    method == "mint", model != "qcomb"
+  ) |>
+  mutate(model = case_when(
+    model == "naiveecdf" ~ "Naïve",
+    model == "ets" ~  "ETS",
+    model == "tscount" ~ "TSGLM",
+    model == "iglm" ~ "GLM",
+    model == "ensemble" ~ "Ensemble"
+  )) |>
+  mutate(
+    measure = factor(measure, levels = c("mase","msse","crps"), labels = c("MASE","MSSE","CRPS")),
+    series = factor(series, levels = c("Total", "Control areas", "Health boards")),
+    model = factor(model, levels = c("Naïve", "ETS", "TSGLM", "GLM", "Ensemble")),
+    week = factor(trunc((h - 1) / 7) + 1)
+  ) |>
+  group_by(week, model, measure, series) |>
+  summarise(accuracy = mean(accuracy), .groups = "drop")
+
+
+acc_summary |>
+  ggplot(aes(x = week, y = accuracy, group = model, col = model)) +
+  geom_line() +
+  geom_point(size = .5) +
+  facet_grid(measure ~ series, scales = "free_y") +
+  labs(y = "Average accuracy", x = "Week ahead")
+```
+
+## Results
+\fontsize{10}{10}\sf
+
+```{r}
+# Set minimum in column to bold
+set_to_bold <- function(table) {
+  for(i in 3:6) {
+    best <- which.min(table[[i]])
+    table[[i]] <- sprintf(table[[i]], fmt="%1.3f")
+    table[[i]][best] <- cell_spec(table[[i]][best], bold=TRUE)
+  }
+  return(table)
+}
+
+msse1 <- rmsse |>
+  filter(
+    method %in% c("mint", "base"),
+    model != "qcomb",
+    h > 42
+  ) |>
+  mutate(model = factor(model,
+    levels = c("naiveecdf","ets","iglm","tscount","ensemble"),
+    labels = c("Naïve", "ETS", "GLM", "TSGLM","Ensemble")),
+    method = factor(method, levels = c("base", "mint"), labels = c("Base", "MinT")),
+  ) |>
+  group_by(method, model, series) |>
+  summarise(msse = mean(msse), .groups = "drop") |>
+  pivot_wider(names_from = series, values_from = msse) |>
+  select(Method = method, Model = model, Total, `Control areas`, `Health boards`, Bottom) |>
+  set_to_bold()
+kbl(msse1, booktabs = TRUE, escape = FALSE, align="llrrrr") |>
+  add_header_above(c(" " = 2, "MSSE" = 4)) |>
+  kable_styling(latex_options = c("hold_position"))
+```
+
+## Results
+\fontsize{10}{10}\sf
+
+```{r}
+mase1 <- mase |>
+  filter(
+    method %in% c("mint", "base"),
+    model != "qcomb",
+    h > 42
+  ) |>
+  mutate(
+    model = factor(model,
+      levels = c("naiveecdf","ets","iglm","tscount","ensemble"),
+      labels = c("Naïve", "ETS", "GLM", "TSGLM","Ensemble")),
+    method = factor(method, levels = c("base", "mint"), labels = c("Base", "MinT"))
+  ) |>
+  group_by(method, model, series) |>
+  summarise(mase = mean(mase), .groups = "drop") |>
+  pivot_wider(names_from = series, values_from = mase) |>
+  select(Method = method, Model = model, Total, `Control areas`, `Health boards`, Bottom) |>
+  set_to_bold()
+kbl(mase1, booktabs = TRUE, escape = FALSE, align="llrrrr") |>
+  add_header_above(c(" " = 2, "MASE" = 4)) |>
+  kable_styling(latex_options = c("hold_position"))
+```
+
+## Results
+\fontsize{10}{10}\sf
+
+```{r}
+crps1 <- readr::read_rds(here::here("results/crps.rds")) |>
+  filter(method %in% c("mint", "base"),
+         model != "qcomb",
+         h > 42
+  ) |>
+  mutate(model = factor(model,
+    levels = c("naiveecdf","ets","iglm","tscount","ensemble"),
+    labels = c("Naïve", "ETS", "GLM", "TSGLM","Ensemble")),
+    method = factor(method, levels = c("base", "mint"), labels = c("Base", "MinT"))
+  ) |>
+  group_by(method, model, series) |>
+  summarise(crps = mean(crps), .groups = "drop") |>
+  pivot_wider(names_from = series, values_from = crps) |>
+  select(Method = method, Model = model, Total, `Control areas`, `Health boards`, Bottom) |>
+  set_to_bold()
+kbl(crps1, booktabs = TRUE, escape = FALSE, align="llrrrr") |>
+  add_header_above(c(" " = 2, "CRPS" = 4)) |>
+  kable_styling(latex_options = c("hold_position"))
+```
+
+## Conclusions
