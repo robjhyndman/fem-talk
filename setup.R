@@ -20,7 +20,12 @@ knitr::opts_chunk$set(
 )
 
 # Font for graphics to be Fira Sans
-ggplot2::theme_set(ggplot2::theme_get() + ggplot2::theme(text = ggplot2::element_text(family = 'Fira Sans')))
+ggplot2::theme_set(
+  ggplot2::theme_get() +
+  ggplot2::theme(
+    text = ggplot2::element_text(family = 'Fira Sans'),
+    plot.background = element_rect(fill = "#fafafa", color = "#fafafa")
+  ))
 # Also in base R plots
 quartzFonts(
   sans = c("Fira Sans Regular","Fira Sans Bold","Fira Sans Italic","Fira Sans Bold Italic")
