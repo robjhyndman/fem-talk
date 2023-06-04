@@ -1,5 +1,5 @@
 ---
-title: Hierarchical Time&nbsp;Series Forecasting in Emergency Medical Services
+title: Probabilistic Forecast Reconciliation For Emergency Services Demand
 author: Rob J Hyndman\newline Bahman Rostami-Tabar
 pdf-engine: pdflatex
 fig-width: 9
