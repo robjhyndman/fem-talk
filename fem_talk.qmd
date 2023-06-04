@@ -15,11 +15,12 @@ format:
         dev: "CairoPDF"
 include-in-header: header.tex
 keep-tex: true
+toc: false
 execute:
   echo: false
   message: false
   warning: false
-  cache: false
+  cache: true
 ---
 
 ```{r}
@@ -28,11 +29,10 @@ execute:
 source(here::here("setup.R"))
 ```
 
-## Outline
 
-\vspace*{0.4cm}\tableofcontents
+## Wales Health Board Areas
 
-# Data
+\placefig{3.3}{1.2}{width=7.8cm}{Map-of-Wales-Health-Boards}
 
 ## Data
 
@@ -44,7 +44,11 @@ incident_gthf <- readr::read_rds(here::here("data/incidents_gt.rds"))
 
 
 * Daily number of attended incidents:\newline 1 October 2015 -- 31 July 2019
-* Disaggregated by nature of incidents, priority, the health board managing the service and the control area (or region).
+* Disaggregated by:
+  * control area
+  * health board
+  * priority
+  * nature of incidents
 * `r label_comma()(NROW(incident_gthf))` rows observations from `r label_comma()(NROW(attributes(incident_gthf)$key))` time series.
 
 ## Data structure
@@ -58,7 +62,7 @@ data <- data.frame(
     "Central & West", "Central & West", "Central & West",
     "North", "South & East", "South & East", "South & East"
   ),
-  level3 = c("HD", "SB", "PO", "BC", "CV", "CT", "AB")
+  level3 = c("HD", "AB", "PO", "BC", "CV", "CT", "AB")
 )
 # transform it to a edge list!
 edges_level1_2 <- data |>
@@ -79,7 +83,7 @@ rbind(edges_level1_2, edges_level2_3) |>
     aes(label = c(
       "All country",
       "Central & West", "North", "South & East",
-      "HD", "SB", "PO", "BC", "CV", "CT", "AB"
+      "HD", "AB", "PO", "BC", "CV", "CT", "AB"
     ))
   ) +
   theme_void() +
@@ -116,6 +120,22 @@ agg_level <- tibble::tribble(
 )
 knitr::kable(agg_level, booktabs = TRUE, position = "left", linesep = "") |>
   kable_classic(full_width = FALSE)
+```
+
+## Data
+\fontsize{10}{10}\sf
+
+```{r}
+incident_gthf
+```
+
+## Data
+\fontsize{10}{10}\sf
+
+```{r}
+incident_gthf  |>
+  arrange(date, region, category, nature, lhb)  |>
+  mutate(category = recode(category, RED = "Red", AMB = "Amber", GRE = "Green"))
 ```
 
 ```{r}
@@ -169,7 +189,8 @@ p_nature1 <- incident_gthf |>
   ggplot(aes(x = date, y = incident, color = nature)) +
   geom_line() +
   gglabs +
-  labs(color = "Nature of incident")
+  labs(color = "Nature of incident") +
+  ylim(0,260)
 
 top_cat <- incident_gthf |>
   as_tibble() |>
@@ -191,7 +212,8 @@ p_nature2 <- incident_gthf |>
   ggplot(aes(x = date, y = incident, color = nature)) +
   geom_line() +
   gglabs +
-  labs(color = "Nature of incident")
+  labs(color = "Nature of incident") +
+  ylim(0,260)
 
 p <- patchwork::align_patches(p_total, p_control, p_board, p_priority, p_nature1, p_nature2)
 ```
@@ -249,8 +271,6 @@ incident_gthf |>
   labs(x = "Strength of trend", y = "Strength of weekly seasonality")
 ```
 
-# Forecast methods and evaluation
-
 ## Forecasting methods
 
 1. **Naïve**: Empirical distribution of past daily attended incidents.
@@ -259,7 +279,69 @@ incident_gthf |>
 4. **TSGLM**: Poisson Regression with same covariates plus three autoregressive terms.
 5. **Ensemble**: Mixture distribution of 1--4.
 
-## Notation reminder
+## Forecasting methods
+
+1. **Naïve**: Empirical distribution of past daily attended incidents.
+
+\begin{block}{}
+\centerline{$y_{T+h|T} \sim \text{Empirical}(y_{1},\dots,y_{T})$}
+\end{block}\vspace*{1cm}\pause
+
+2. **ETS**: Exponential Smoothing State Space models.
+
+\begin{block}{}
+\centerline{$y_{T+h|T} \sim \text{Normal}(\hat{y}_{T+h|T},\hat{\sigma}^2_{T+h|T})$}
+\end{block}
+
+## Forecasting methods
+
+3. **GLM**: Poission Regression
+
+\begin{block}{}
+\centerline{$y_{T+h|T} \sim \text{Poisson}(\hat{y}_{T+h|T}) \qquad\text{where}\qquad \hat{y}_{T+h|T} = \exp(\bm{x}_{T+h}'\bm{\beta})$}
+\end{block}
+
+and $\bm{x}_{T+h}$ is a vector of covariates including
+
+\begin{multicols}{2}
+\begin{itemize}\tightlist
+\item spline trend
+\item day of the week
+\item annual Fourier seasonality
+\item public holidays
+\item school holidays
+\item Christmas Day
+\item New Year's Day
+\end{itemize}
+\end{multicols}\vspace*{10cm}
+
+## Forecasting methods
+
+4. **TSGLM**: Poisson Regression
+
+\begin{block}{}\vspace*{-0.8cm}
+\begin{align*}
+y_{T+h|T} &\sim \text{Poisson}(\hat{y}_{T+h|T}) \\
+\text{where}\qquad
+\hat{y}_{T+h|T} &= \exp\Big(\bm{x}_{T+h}'\bm{\beta} + \sum_{k=1}^3 \alpha_k \log(y_{T+h-k}+1)\Big)
+\end{align*}
+\end{block}\vspace*{-0.3cm}
+
+and $\bm{x}_{T+h}$ is a vector of covariates including
+
+\begin{multicols}{2}
+\begin{itemize}\tightlist
+\item spline trend
+\item day of the week
+\item annual Fourier seasonality
+\item public holidays
+\item school holidays
+\item Christmas Day
+\item New Year's Day
+\end{itemize}
+\end{multicols}\vspace*{10cm}
+
+## Notation
 
 \begin{textblock}{8.5}(0.2,1.5)
 Every collection of time series with linear constraints can be written as
@@ -325,18 +407,61 @@ $t$.
 
 ## Nonparametric bootstrap reconciliation
 
+* Fit model to all series and store the residuals as $\underaccent{\tilde}{\bm{\varepsilon}}_t$.
+* These should be serially uncorrelated but cross-sectionally correlated.
+* Draw iid samples from $\underaccent{\tilde}{\bm{\varepsilon}}_1,\dots,\underaccent{\tilde}{\bm{\varepsilon}}_T$ with replacement.
+* Simulate future sample paths for model using the bootstrapped residuals.
+* Reconcile each sample path using MinT.
+* Combine the reconciled sample paths to form a mixture distribution at each forecast horizon.
 
 ## Performance evaluation
 
-* Time series cross-validation: forecast horizon of 1--84 \rlap{days.}
+* Ten-fold time series cross-validation
+* Forecast horizon of 1--84 days
+* Each training set contains an additional 42 days.
 * Forecasts at 43--84 days correspond to planning horizon.
 
-1. Training set: all data to 2018-04-25.
-2. Training set: all data to 2018-06-06.
-
-$\hspace*{2cm}\vdots$
-
-10. Training set: all data to 2019-05-09.
+```{r}
+#| label: cv1
+#| echo: false
+#| fig-height: 2.7
+.lines <- 10
+.init <- 30
+.step <- 6
+h <- 7:12
+max_t <- .init + .step*(.lines - 1) + max(h)
+expand.grid(
+    time = seq(max_t),
+    .id = seq(.lines)
+  ) |>
+  mutate(
+    min_h = (.id-1) * .step + .init + min(h),
+    max_h =  (.id-1) * .step + .init + max(h),
+    observation = case_when(
+      time <= ((.id - 1) * .step + .init) ~ "train",
+      time < min_h ~ "test1",
+      time <= max_h ~ "test2",
+      TRUE ~ "unused"
+    )
+  ) |>
+  ggplot(aes(x = time, y = .id)) +
+  geom_segment(
+    aes(x = 0, xend = max_t+1, y = .id, yend = .id),
+    arrow = arrow(length = unit(0.015, "npc")),
+    col = "black", linewidth = .25
+  ) +
+  geom_point(aes(col = observation), size = 2) +
+  scale_y_reverse() +
+  scale_colour_manual(values = c(train = "#0072B2", test1 = "#d59771", test2 = "#D55E00", unused = "gray")) +
+  theme_void() +
+  guides(colour = "none") +
+  labs(x = "weeks", y = "") +
+  theme_void() +
+  theme(
+    axis.title = element_text(),
+    plot.background = element_rect(fill = "#fafafa", color = "#fafafa")
+  )
+```
 
 ## Performance evaluation
 
@@ -386,8 +511,6 @@ $$
 
 \vspace*{10cm}
 
-# Results
-
 ```{r}
 #| label: results
 #| include: false
@@ -402,7 +525,7 @@ crps <- readr::read_rds(here::here("results/crps.rds")) |>
 ```
 
 
-## Results
+## Forecast accuracy
 
 ```{r}
 #| label: results_graph
@@ -447,7 +570,7 @@ acc_summary |>
   labs(y = "Average accuracy", x = "Week ahead")
 ```
 
-## Results
+## Forecast accuracy: 43--84 days ahead
 \fontsize{10}{10}\sf
 
 ```{r}
@@ -485,7 +608,7 @@ kbl(msse1, booktabs = TRUE, escape = FALSE, align = "llrrrr") |>
   kable_styling(latex_options = c("hold_position"))
 ```
 
-## Results
+## Forecast accuracy: 43--84 days ahead
 \fontsize{10}{10}\sf
 
 ```{r}
@@ -513,7 +636,7 @@ kbl(mase1, booktabs = TRUE, escape = FALSE, align = "llrrrr") |>
   kable_styling(latex_options = c("hold_position"))
 ```
 
-## Results
+## Forecast accuracy: 43--84 days ahead
 \fontsize{10}{10}\sf
 
 ```{r}
@@ -542,3 +665,7 @@ kbl(crps1, booktabs = TRUE, escape = FALSE, align = "llrrrr") |>
 ```
 
 ## Conclusions
+
+* Ensemble mixture distributions give better forecasts than any component methods.
+* Forecast reconciliation improves forecast accuracy, even when some component methods are quite poor.
+* Forecast reconciliation allows coordinated planning and resource allocation.
