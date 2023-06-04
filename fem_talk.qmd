@@ -316,6 +316,45 @@ and $\bm{x}_{T+h}$ is a vector of covariates including
 \end{multicols}\vspace*{10cm}
 
 ## Forecasting methods
+\fontsize{9}{8}\sf\vspace*{-0.15cm}
+
+```{r}
+y <- incident_gthf |>
+  filter(is_aggregated(region), is_aggregated(category), is_aggregated(nature))  |>
+  pull(incident)  |>
+  ts(frequency=7, start=c(1,4))
+holidays <- readr::read_rds(here::here("data/holidays_ts.rds"))
+
+n <- length(y)
+fourier_year <- forecast::fourier(ts(y, frequency = 365.25), K = 3)
+season_week <- forecast::seasonaldummy(y)
+trend <- splines::ns(seq(n), df = round(n / 300))
+X <- cbind(trend, season_week, fourier_year, holidays[seq_along(y), ])
+# Remove constant covariates
+constant <- apply(X, 2, forecast:::is.constant)
+X <- X[, !constant]
+fit <- glm(y ~ X, family = poisson())
+names(fit$coefficients) <- c(
+  "(Intercept)", paste0("Spline_",1:5),
+  "Monday","Tuesday", "Wednesday", "Thursday", "Friday", "Saturday",
+  "Fourier_S1_365", "Fourier_C1_365", "Fourier_S2_365", "Fourier_C2_365","Fourier_S3_365", "Fourier_C3_365",
+  "Public_holiday","School_holiday", "Xmas", "New_years_day")
+glm_summary(fit)
+```
+
+\begin{textblock}{2.7}(12,3)
+\fontsize{9}{9}\sf
+\begin{block}{\fontsize{9}{9}\sf\centerline{Significance}}
+\begin{tabular}{rl}
+\verb|***| &$p < 0.001$\\
+\verb|**| &$p < 0.01$\\
+\verb|*| &$p < 0.05$\\
+\verb|.| &$p < 0.1$
+\end{tabular}
+\end{block}
+\end{textblock}
+
+## Forecasting methods
 
 4. **TSGLM**: Poisson Regression
 
