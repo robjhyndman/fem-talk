@@ -554,13 +554,17 @@ $$
 #| label: results
 #| include: false
 rmsse <- readr::read_rds(here::here("results/rmsse.rds")) |>
-  mutate(msse = rmsse^2)
-mase <- readr::read_rds(here::here("results/mase.rds"))
+  mutate(msse = rmsse^2) |> 
+	mutate(model = if_else(model == "", "ensemble2", model))
+mase <- readr::read_rds(here::here("results/mase.rds")) |> 
+		mutate(model = if_else(model == "", "ensemble2", model))
 crps <- readr::read_rds(here::here("results/crps.rds")) |>
+	mutate(model = if_else(model == "", "ensemble2", model)) |> 
   pivot_wider(names_from = model, values_from = crps) |>
   group_by(method, h, series) |>
   mutate(across(where(is.numeric), ~ .x / naiveecdf)) |>
-  ungroup()
+  ungroup() |> 
+  pivot_longer(ensemble2:tscount, names_to = "model", values_to = "crps")
 ```
 
 
@@ -568,21 +572,19 @@ crps <- readr::read_rds(here::here("results/crps.rds")) |>
 
 ```{r}
 #| label: results_graph
-crps <- crps |>
-  pivot_longer(ensemble:tscount, names_to = "model", values_to = "crps")
-
 accuracy <- bind_rows(
   rmsse |> mutate(measure = "msse", accuracy = rmsse^2),
   mase |> mutate(measure = "mase", accuracy = mase),
   crps |> mutate(measure = "crps", accuracy = crps),
 ) |>
-  select(-rmsse, -mase, -crps)
+  select(-rmsse, -mase, -crps) |> 
+	filter(model != "ensemble2", model != "qcomb")
 
 # Plot of average accuracy vs week for each method for Total
 acc_summary <- accuracy |>
   filter(
     series %in% c("Total", "Control areas", "Health boards"),
-    method == "mint", model != "qcomb"
+    method == "mint",
   ) |>
   mutate(model = case_when(
     model == "naiveecdf" ~ "Naïve",
@@ -627,7 +629,7 @@ set_to_bold <- function(table) {
 msse1 <- rmsse |>
   filter(
     method %in% c("mint", "base"),
-    model != "qcomb",
+    model != "qcomb", model != "ensemble2",
     h > 42
   ) |>
   mutate(
@@ -655,7 +657,7 @@ kbl(msse1, booktabs = TRUE, escape = FALSE, align = "llrrrr") |>
 mase1 <- mase |>
   filter(
     method %in% c("mint", "base"),
-    model != "qcomb",
+    model != "qcomb", model != "ensemble2",
     h > 42
   ) |>
   mutate(
@@ -683,7 +685,7 @@ kbl(mase1, booktabs = TRUE, escape = FALSE, align = "llrrrr") |>
 crps1 <- readr::read_rds(here::here("results/crps.rds")) |>
   filter(
     method %in% c("mint", "base"),
-    model != "qcomb",
+    model != "qcomb", model != "ensemble2",
     h > 42
   ) |>
   mutate(
@@ -707,4 +709,5 @@ kbl(crps1, booktabs = TRUE, escape = FALSE, align = "llrrrr") |>
 
 * Ensemble mixture distributions give better forecasts than any component methods.
 * Forecast reconciliation improves forecast accuracy, even when some component methods are quite poor.
+* The ensemble without the Naïve method was worse.
 * Forecast reconciliation allows coordinated planning and resource allocation.
