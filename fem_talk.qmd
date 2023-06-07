@@ -554,16 +554,16 @@ $$
 #| label: results
 #| include: false
 rmsse <- readr::read_rds(here::here("results/rmsse.rds")) |>
-  mutate(msse = rmsse^2) |> 
+  mutate(msse = rmsse^2) |>
 	mutate(model = if_else(model == "", "ensemble2", model))
-mase <- readr::read_rds(here::here("results/mase.rds")) |> 
+mase <- readr::read_rds(here::here("results/mase.rds")) |>
 		mutate(model = if_else(model == "", "ensemble2", model))
 crps <- readr::read_rds(here::here("results/crps.rds")) |>
-	mutate(model = if_else(model == "", "ensemble2", model)) |> 
+	mutate(model = if_else(model == "", "ensemble2", model)) |>
   pivot_wider(names_from = model, values_from = crps) |>
   group_by(method, h, series) |>
   mutate(across(where(is.numeric), ~ .x / naiveecdf)) |>
-  ungroup() |> 
+  ungroup() |>
   pivot_longer(ensemble2:tscount, names_to = "model", values_to = "crps")
 ```
 
@@ -577,7 +577,7 @@ accuracy <- bind_rows(
   mase |> mutate(measure = "mase", accuracy = mase),
   crps |> mutate(measure = "crps", accuracy = crps),
 ) |>
-  select(-rmsse, -mase, -crps) |> 
+  select(-rmsse, -mase, -crps) |>
 	filter(model != "ensemble2", model != "qcomb")
 
 # Plot of average accuracy vs week for each method for Total
@@ -711,3 +711,25 @@ kbl(crps1, booktabs = TRUE, escape = FALSE, align = "llrrrr") |>
 * Forecast reconciliation improves forecast accuracy, even when some component methods are quite poor.
 * The ensemble without the Naïve method was worse.
 * Forecast reconciliation allows coordinated planning and resource allocation.
+
+
+## More information
+\fontsize{18}{20}\sf
+
+\href{https://robjhyndman.com/fem2023}{\includegraphics[width=0.5cm]{figs/slide}\, robjhyndman.com/fem2023}
+
+\href{https://robjhyndman.com}{\faicon{home} robjhyndman.com}
+
+\href{https://twitter.com/robjhyndman}{\faicon{twitter} @robjhyndman}
+
+\href{https://aus.social/@robjhyndman}{\includegraphics[width=0.5cm]{figs/mastodon}\, aus.social/@robjhyndman}
+
+\href{https://github.com/robjhyndman}{\faicon{github}  @robjhyndman}
+
+\href{mailto:rob.hyndman@monash.edu}{\faicon{envelope}  rob.hyndman@monash.edu}
+
+\begin{textblock}{6.2}(0,8.8)\pgfsetfillopacity{0.65}
+\begin{beamercolorbox}[wd=4.7cm]{block body}
+\fontsize{6}{6}\sf\color[RGB]{72,45,34}\href{https://www.flaticon.com/free-icons/presentation}{Presentation icon created by orvipixel - Flaticon}
+\end{beamercolorbox}
+\end{textblock}
